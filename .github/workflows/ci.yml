@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Build
+        run: mvn -B -DskipTests package
+
+      - name: Run pipeline (seed → query → report)
+        run: java -jar target/play-duckdb-1.0.0.jar all
+
+      - name: Verify artifacts
+        run: |
+          set -euo pipefail
+          echo "Parquet files:"
+          find data/generated -name '*.parquet' | tee /tmp/parquet.list
+          test -s /tmp/parquet.list
+          echo "Reports:"
+          ls -la reports/
+          test -n "$(ls reports/report_*.csv 2>/dev/null)"
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: play-duckdb-reports
+          path: |
+            reports/
+            data/generated/
+          if-no-files-found: warn

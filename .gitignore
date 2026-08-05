@@ -1,0 +1,9 @@
+target/
+.idea/
+*.iml
+.DS_Store
+out/
+data/generated/
+reports/
+*.class
+.venv/

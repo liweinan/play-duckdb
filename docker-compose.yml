@@ -1,0 +1,33 @@
+# One-command demo for the Parquet + DuckDB + Java reporting pipeline.
+#
+# Proxy tip (macOS Docker Desktop → host Clash/V2Ray on 7890):
+#   export HTTP_PROXY=http://host.docker.internal:7890
+#   export HTTPS_PROXY=http://host.docker.internal:7890
+#   docker compose build && docker compose run --rm play-duckdb
+#
+# Or use the helper script: ./run.sh
+
+services:
+  play-duckdb:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,host.docker.internal}
+    image: play-duckdb:local
+    volumes:
+      # Persist generated Parquet and report outputs on the host
+      - ./data/generated:/app/data/generated
+      - ./reports:/app/reports
+      - ./sql:/app/sql:ro
+    environment:
+      # Where the "vendor-like" Parquet extracts land
+      DATA_DIR: /app/data/generated
+      REPORT_DIR: /app/reports
+      SQL_DIR: /app/sql
+    # Override CMD to run a single stage, e.g.:
+    #   docker compose run --rm play-duckdb seed
+    #   docker compose run --rm play-duckdb query
+    #   docker compose run --rm play-duckdb report

@@ -1,0 +1,21 @@
+-- =============================================================================
+-- 01_concepts.sql — Read-only notes (reference). Not executed by the Java app.
+-- =============================================================================
+-- Mental model for this sample (aligned with a Markets reporting learning path):
+--
+--   [Vendor / extract]  -->  Parquet files on disk (columnar, partitioned)
+--                                  |
+--                                  v
+--                           DuckDB scan (read_parquet)
+--                                  |
+--                                  v
+--                     Logical views (hide paths / shape)
+--                                  |
+--                                  v
+--                     Java JDBC  -->  CSV / downstream reports
+--
+-- Iceberg (optional next step):
+--   Iceberg is a table format (metadata + snapshots) on top of files like Parquet.
+--   DuckDB can query Iceberg tables via the `iceberg` extension when you have a catalog.
+--   This sample uses Hive-partitioned Parquet + SQL views as a gentler first step.
+-- =============================================================================
