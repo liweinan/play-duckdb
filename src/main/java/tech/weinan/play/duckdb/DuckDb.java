@@ -13,7 +13,7 @@ import java.sql.Statement;
  * <p>Why DuckDB (for this learning project)?
  * <ul>
  *   <li>Embedded — no cluster / no broker to start</li>
- *   <li>First-class Parquet — {@code read_parquet()} / {@code COPY ... TO} </li>
+ *   <li>Iceberg scan — {@code iceberg_scan()} over MinIO after reading the catalog pointer</li>
  *   <li>SQL analytics (aggregations, window functions) close to what reporting teams use</li>
  * </ul>
  *

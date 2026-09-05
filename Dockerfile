@@ -19,20 +19,28 @@ ENV http_proxy=${HTTP_PROXY} \
 
 WORKDIR /app
 COPY pom.xml .
-# Prefetch dependencies for better layer caching
 RUN mvn -B -q dependency:go-offline || mvn -B -q dependency:resolve
 COPY src ./src
 RUN mvn -B -q -DskipTests package
 
 FROM eclipse-temurin:17-jre
-WORKDIR /app
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ENV http_proxy=${HTTP_PROXY} \
+    https_proxy=${HTTPS_PROXY} \
+    HTTP_PROXY=${HTTP_PROXY} \
+    HTTPS_PROXY=${HTTPS_PROXY} \
+    NO_PROXY=${NO_PROXY} \
+    no_proxy=${NO_PROXY}
 
-# Runtime data & report directories (also mounted via compose)
-RUN mkdir -p /app/data/generated /app/reports
+WORKDIR /app
+RUN mkdir -p /app/reports
 
 COPY --from=build /app/target/play-duckdb-1.0.0.jar /app/app.jar
 COPY sql /app/sql
 
-# Default: run the full learning pipeline (seed → query → report)
+RUN java -jar /app/app.jar install-extensions
+
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
-CMD ["all"]
+CMD ["query"]

@@ -9,19 +9,13 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 /**
- * Stage 3 — Emit simple "report-like" artifacts from Java + DuckDB.
- *
- * <p>In production, reports may feed internal control packs or regulatory filings.
- * Here we only write local CSV files with <b>synthetic</b> aggregations so you can
- * practice the engineering pattern: SQL in DuckDB → consume ResultSet in Java → export.
+ * Stage 3 — Emit CSV reports from Java + DuckDB over Iceberg views.
  */
 public final class ReportJob {
 
-    private final Path dataDir;
     private final Path reportDir;
 
-    public ReportJob(Path dataDir, Path reportDir) {
-        this.dataDir = dataDir;
+    public ReportJob(Path reportDir) {
         this.reportDir = reportDir;
     }
 
@@ -29,24 +23,13 @@ public final class ReportJob {
         System.out.println("[report] Generating CSV reports under " + reportDir.toAbsolutePath());
         Files.createDirectories(reportDir);
 
-        String positionGlob = sqlPath(dataDir.resolve("collateral_position/**/*.parquet"));
-        String loanGlob = sqlPath(dataDir.resolve("securities_loan/**/*.parquet"));
         String stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
 
         try (Connection connection = DuckDb.openInMemory();
              Statement statement = connection.createStatement()) {
 
-            statement.execute("""
-                    CREATE OR REPLACE VIEW v_collateral_position AS
-                    SELECT * FROM read_parquet('%s', hive_partitioning=true);
-                    """.formatted(positionGlob));
+            IcebergTables.createViews(connection);
 
-            statement.execute("""
-                    CREATE OR REPLACE VIEW v_securities_loan AS
-                    SELECT * FROM read_parquet('%s', hive_partitioning=true);
-                    """.formatted(loanGlob));
-
-            // Report A: collateral inventory by asset type (latest as_of_date only)
             Path inventoryCsv = reportDir.resolve("report_inventory_by_asset_" + stamp + ".csv");
             statement.execute("""
                     COPY (
@@ -65,7 +48,6 @@ public final class ReportJob {
                     ) TO '%s' (HEADER, DELIMITER ',');
                     """.formatted(sqlPath(inventoryCsv)));
 
-            // Report B: open loan exposure summary
             Path loanCsv = reportDir.resolve("report_open_loans_" + stamp + ".csv");
             statement.execute("""
                     COPY (
@@ -80,7 +62,6 @@ public final class ReportJob {
                     ) TO '%s' (HEADER, DELIMITER ',');
                     """.formatted(sqlPath(loanCsv)));
 
-            // Also print a small preview via JDBC ResultSet (how app code usually consumes rows)
             System.out.println("[report] JDBC preview of inventory report:");
             try (ResultSet rs = statement.executeQuery("""
                     SELECT asset_type, currency, ROUND(SUM(market_value), 2) AS mv

@@ -6,60 +6,33 @@ import java.sql.Connection;
 import java.sql.Statement;
 
 /**
- * Stage 2 — Query Parquet directly with DuckDB (no need to load into a warehouse first).
+ * Stage 2 — Query Iceberg with DuckDB.
  *
- * <p>Key idea: DuckDB can push predicates into the Parquet scan
- * ({@code read_parquet(..., hive_partitioning=true)}), which is why it is popular
- * for reporting / EUD-style analysis over columnar extracts.
- *
- * <p>We also create <b>views</b> as a lightweight "logical layer":
- * downstream Java code queries view names, not raw file paths.
- * (This is a teaching stand-in for catalog/isolation concepts; see docs/LEARNING_PATH.md
- * for how Apache Iceberg relates.)
+ * <p>Java reads {@code iceberg_tables.metadata_location} from Postgres (Spark
+ * JdbcCatalog pointer), then DuckDB {@code iceberg_scan}s that metadata file
+ * on MinIO. Views hide the S3 path from analytics SQL.
  */
 public final class QueryParquetJob {
 
-    private final Path dataDir;
     private final Path sqlDir;
 
-    public QueryParquetJob(Path dataDir, Path sqlDir) {
-        this.dataDir = dataDir;
+    public QueryParquetJob(Path sqlDir) {
         this.sqlDir = sqlDir;
     }
 
     public void run() throws Exception {
-        System.out.println("[query] Scanning Parquet with DuckDB...");
-
-        String positionGlob = sqlPath(dataDir.resolve("collateral_position/**/*.parquet"));
-        String loanGlob = sqlPath(dataDir.resolve("securities_loan/**/*.parquet"));
+        System.out.println("[query] Scanning Iceberg with DuckDB...");
 
         try (Connection connection = DuckDb.openInMemory();
              Statement statement = connection.createStatement()) {
 
-            // hive_partitioning=true: infer as_of_date from directory names
-            statement.execute("""
-                    CREATE OR REPLACE VIEW v_collateral_position AS
-                    SELECT *
-                    FROM read_parquet('%s', hive_partitioning=true);
-                    """.formatted(positionGlob));
+            IcebergTables.createViews(connection);
 
-            statement.execute("""
-                    CREATE OR REPLACE VIEW v_securities_loan AS
-                    SELECT *
-                    FROM read_parquet('%s', hive_partitioning=true);
-                    """.formatted(loanGlob));
-
-            // Optional: run the curated SQL notebook if present
             Path demoSql = sqlDir.resolve("02_analytics.sql");
             if (Files.isRegularFile(demoSql)) {
                 System.out.println("[query] Executing " + demoSql.toAbsolutePath());
-                String script = Files.readString(demoSql)
-                        // Allow the SQL file to stay path-agnostic
-                        .replace("${POSITION_GLOB}", positionGlob)
-                        .replace("${LOAN_GLOB}", loanGlob);
-                // File may contain SELECT demos — execute statement by statement and print SELECTs
+                String script = Files.readString(demoSql);
                 for (String part : script.split(";")) {
-                    // Strip full-line SQL comments so "-- demo" above a SELECT is not skipped
                     String sql = stripLineComments(part).trim();
                     if (sql.isEmpty()) {
                         continue;
@@ -72,7 +45,6 @@ public final class QueryParquetJob {
                     }
                 }
             } else {
-                // Fallback demos if sql file missing
                 DuckDb.printQuery(connection, """
                         SELECT as_of_date, asset_type, ROUND(SUM(market_value), 2) AS total_mv
                         FROM v_collateral_position
@@ -93,14 +65,9 @@ public final class QueryParquetJob {
             }
         }
 
-        System.out.println("[query] Done. Views hid file paths from the query author.");
+        System.out.println("[query] Done. Views hid Iceberg metadata paths from the query author.");
     }
 
-    private static String sqlPath(Path path) {
-        return path.toAbsolutePath().toString().replace('\\', '/');
-    }
-
-    /** Remove lines that are empty or start with `--` (simple SQL comment style). */
     private static String stripLineComments(String sql) {
         StringBuilder builder = new StringBuilder();
         for (String line : sql.split("\n", -1)) {

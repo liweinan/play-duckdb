@@ -1,16 +1,8 @@
 -- =============================================================================
--- 02_analytics.sql — Executed by QueryParquetJob after views are created.
--- Placeholders ${POSITION_GLOB} / ${LOAN_GLOB} are substituted by Java.
+-- 02_analytics.sql — Executed by QueryParquetJob after Iceberg views exist.
+-- Views v_collateral_position / v_securities_loan are created in Java from
+-- iceberg_scan(<postgres metadata_location>).
 -- =============================================================================
-
--- Recreate views explicitly (safe if Java already created them)
-CREATE OR REPLACE VIEW v_collateral_position AS
-SELECT *
-FROM read_parquet('${POSITION_GLOB}', hive_partitioning=true);
-
-CREATE OR REPLACE VIEW v_securities_loan AS
-SELECT *
-FROM read_parquet('${LOAN_GLOB}', hive_partitioning=true);
 
 -- Demo 1: inventory by asset type per day
 SELECT as_of_date,

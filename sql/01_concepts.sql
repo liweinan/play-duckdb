@@ -1,21 +1,22 @@
 -- =============================================================================
 -- 01_concepts.sql — Read-only notes (reference). Not executed by the Java app.
 -- =============================================================================
--- Mental model for this sample (aligned with a Markets reporting learning path):
+-- Mental model:
 --
---   [Vendor / extract]  -->  Parquet files on disk (columnar, partitioned)
---                                  |
---                                  v
---                           DuckDB scan (read_parquet)
---                                  |
---                                  v
---                     Logical views (hide paths / shape)
---                                  |
---                                  v
---                     Java JDBC  -->  CSV / downstream reports
+--   Spark (JdbcCatalog)
+--     CREATE / INSERT Iceberg tables
+--           |
+--           +-- pointer (table → metadata.json) -->  PostgreSQL iceberg_tables
+--           +-- metadata + Parquet files --------->  MinIO s3://warehouse/
 --
--- Iceberg (optional next step):
---   Iceberg is a table format (metadata + snapshots) on top of files like Parquet.
---   DuckDB can query Iceberg tables via the `iceberg` extension when you have a catalog.
---   This sample uses Hive-partitioned Parquet + SQL views as a gentler first step.
+--   Java reads metadata_location from Postgres
+--           |
+--           v
+--   DuckDB iceberg_scan(exact metadata.json) + VIEW
+--           |
+--           v
+--   Java JDBC  -->  CSV reports
+--
+-- Do not iceberg_scan the table root directory: JdbcCatalog does not write
+-- version-hint.text. The catalog pointer in Postgres is the current snapshot.
 -- =============================================================================

@@ -1,14 +1,15 @@
 # Learning Path / 自学路径
 
-面向「报表层：Parquet → DuckDB → Java」的工程练习。数据为**虚构样例**，与真实银行系统无关。
+面向「中间层 Spark 写 Iceberg，runtime DuckDB 出报表」的工程练习。数据为**虚构样例**。
 
 ## 和岗位能力的对应关系
 
 | 岗位描述（抽象） | 本项目练习点 |
 |------------------|--------------|
-| Vendor 产出 Parquet | `SeedParquetJob`：`COPY ... TO (FORMAT PARQUET, PARTITION_BY ...)` |
-| DuckDB 查询与统计 | `QueryParquetJob` + `sql/02_analytics.sql` |
-| 逻辑层隔离 | SQL `VIEW` 隐藏路径；文档中说明 Iceberg 是下一步 |
+| Spark 写湖仓表 | `spark/jobs/seed_iceberg.py`：JdbcCatalog + MinIO |
+| Catalog 指针 | Postgres `iceberg_tables.metadata_location` |
+| DuckDB runtime 查询 | `QueryParquetJob` + `sql/02_analytics.sql` |
+| 逻辑层隔离 | SQL `VIEW` 隐藏 metadata 路径 |
 | Java 读数出报表 | `ReportJob`：JDBC + `COPY` 出 CSV |
 
 ## 建议学习顺序（约 1–2 晚）
@@ -16,68 +17,57 @@
 ### 1. 先跑通（30 分钟）
 
 ```bash
-export http_proxy=http://localhost:7890
-export https_proxy=http://localhost:7890
 ./run.sh all
 ```
 
 看：
 
-- `data/generated/collateral_position/as_of_date=.../*.parquet`
+- MinIO 控制台 `http://localhost:9001` 下 `warehouse/` 的 `metadata/` 与 `data/`
+- `psql` 里 `iceberg_tables.metadata_location`
 - `reports/report_*.csv`
 
-### 2. 读懂三阶段代码（1 小时）
+### 2. 读懂三阶段（1 小时）
 
-1. `SeedParquetJob` — 表结构、分区导出  
-2. `QueryParquetJob` — `read_parquet` + view  
+1. `seed_iceberg.py` — Spark 建表、分区、INSERT  
+2. `IcebergTables` — 读 Postgres 指针，再 `iceberg_scan`  
 3. `ReportJob` — 聚合报表  
 
 对照 `sql/02_analytics.sql` 里的窗口函数与 JOIN。
+
+不要对表根目录做 `iceberg_scan('s3://warehouse/demo/...')`：JdbcCatalog 不写 `version-hint.text`，失败 commit 可能留下未登记的 metadata 文件。
 
 ### 3. 自己改一题（1 小时）
 
 任选：
 
-- 新增一种 `asset_type`，重新 `seed` + `report`
+- 在 `seed_iceberg.py` 再 `INSERT` 一行，重新 `seed` + `report`，确认 DuckDB 读到新 snapshot
 - 在 `02_analytics.sql` 增加「按币种汇总 open loan」
-- 让 `ReportJob` 再输出一份 JSON（可用纯字符串拼接或额外依赖）
+- 让 `ReportJob` 再输出一份 JSON
 
-### 4. Iceberg 概念（阅读，可选动手）
+### 4. Catalog 在干什么
 
-Apache Iceberg ≈ **表格式**：在 Parquet（等）文件之上提供：
-
-- schema 演进
-- snapshot / time travel
-- 隐藏分区细节
-
-DuckDB 可通过 `INSTALL iceberg; LOAD iceberg;` 查询部分 Iceberg 表（需 catalog/元数据）。  
-本样例用 **Hive 分区目录 + VIEW** 降低门槛；工作中若团队已有 Iceberg catalog，再把 `read_parquet` 换成 Iceberg scan。
+Iceberg catalog 只保管「当前 metadata.json 地址」这一枚可变指针。数据文件写出后不改。Spark commit 用 Postgres 事务切换指针；DuckDB 读同一枚指针，才能和 Spark 看到同一个 current snapshot。
 
 ## 常用 DuckDB SQL 片段
 
 ```sql
--- 扫分区 Parquet
-SELECT * FROM read_parquet('data/generated/collateral_position/**/*.parquet',
-                           hive_partitioning=true);
+INSTALL iceberg; LOAD iceberg;
+INSTALL httpfs; LOAD httpfs;
 
--- 只看某一天（分区裁剪）
-SELECT * FROM read_parquet('data/generated/collateral_position/**/*.parquet',
-                           hive_partitioning=true)
-WHERE as_of_date = DATE '2026-08-02';
+CREATE SECRET (
+  TYPE S3,
+  KEY_ID 'admin',
+  SECRET 'password',
+  ENDPOINT 'localhost:9000',
+  URL_STYLE 'path',
+  USE_SSL false
+);
 
--- 导出
-COPY (SELECT 1 AS x) TO 'out.parquet' (FORMAT PARQUET);
-```
-
-## 本地不配 Docker 时
-
-```bash
-export http_proxy=http://localhost:7890 https_proxy=http://localhost:7890
-mvn -q -DskipTests package
-java -jar target/play-duckdb-1.0.0.jar all
+SELECT * FROM iceberg_scan('s3://warehouse/demo/collateral_position/metadata/<file>.metadata.json',
+                           allow_moved_paths = true);
 ```
 
 ## 安全提醒
 
-- 勿把真实客户、真实持仓、真实系统名写进样例仓库  
-- LinkedIn / 公开文档只用泛化表述（Java、reporting、Parquet、DuckDB）
+- 勿把真实客户、真实持仓、真实系统名写进样例仓库
+- LinkedIn / 公开文档只用泛化表述（Java、Spark、Iceberg、DuckDB）

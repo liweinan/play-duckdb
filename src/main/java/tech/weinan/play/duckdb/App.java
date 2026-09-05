@@ -2,66 +2,61 @@ package tech.weinan.play.duckdb;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Connection;
 import java.util.Locale;
 
 /**
  * Entry point for the self-study pipeline.
  *
- * <p>Stages mirror a simplified "Reporting layer" learning path:
+ * <p>Stages:
  * <ol>
- *   <li>{@code seed}   — simulate a vendor extract by writing Parquet files</li>
- *   <li>{@code query}  — scan Parquet with DuckDB (SQL analytics)</li>
- *   <li>{@code report} — produce CSV "regulatory-style" aggregations via Java</li>
- *   <li>{@code all}    — run seed → query → report</li>
+ *   <li>{@code query}  — DuckDB analytics over Iceberg (pointer from Postgres)</li>
+ *   <li>{@code report} — CSV aggregations via Java JDBC</li>
+ *   <li>{@code all}    — query → report</li>
  * </ol>
  *
- * <p>Usage:
- * <pre>
- *   java -jar app.jar [all|seed|query|report]
- * </pre>
+ * <p>{@code seed} is Spark, not this JAR. Use {@code ./run.sh seed}.
  */
 public final class App {
 
     public static void main(String[] args) throws Exception {
         String stage = args.length == 0 ? "all" : args[0].trim().toLowerCase(Locale.ROOT);
 
-        // Configurable paths (Docker sets these; local defaults work for IDE runs)
-        Path dataDir = Path.of(envOr("DATA_DIR", "data/generated"));
-        Path reportDir = Path.of(envOr("REPORT_DIR", "reports"));
-        Path sqlDir = Path.of(envOr("SQL_DIR", "sql"));
-
-        Files.createDirectories(dataDir);
+        Path reportDir = Path.of(IcebergTables.envOr("REPORT_DIR", "reports"));
+        Path sqlDir = Path.of(IcebergTables.envOr("SQL_DIR", "sql"));
         Files.createDirectories(reportDir);
 
         System.out.println("=== play-duckdb ===");
-        System.out.println("DATA_DIR   = " + dataDir.toAbsolutePath());
         System.out.println("REPORT_DIR = " + reportDir.toAbsolutePath());
         System.out.println("STAGE      = " + stage);
         System.out.println();
 
         switch (stage) {
-            case "seed" -> new SeedParquetJob(dataDir).run();
-            case "query" -> new QueryParquetJob(dataDir, sqlDir).run();
-            case "report" -> new ReportJob(dataDir, reportDir).run();
+            case "install-extensions" -> {
+                try (Connection connection = DuckDb.openInMemory()) {
+                    IcebergTables.installExtensions(connection);
+                }
+                System.out.println("DuckDB iceberg + httpfs extensions installed.");
+            }
+            case "seed" -> {
+                System.err.println("seed is a Spark job. Use: ./run.sh seed");
+                System.exit(1);
+            }
+            case "query" -> new QueryParquetJob(sqlDir).run();
+            case "report" -> new ReportJob(reportDir).run();
             case "all" -> {
-                new SeedParquetJob(dataDir).run();
-                new QueryParquetJob(dataDir, sqlDir).run();
-                new ReportJob(dataDir, reportDir).run();
+                new QueryParquetJob(sqlDir).run();
+                new ReportJob(reportDir).run();
             }
             default -> {
                 System.err.println("Unknown stage: " + stage);
-                System.err.println("Use: all | seed | query | report");
+                System.err.println("Use: all | query | report");
+                System.err.println("Seed Iceberg tables with: ./run.sh seed");
                 System.exit(1);
             }
         }
 
         System.out.println();
-        System.out.println("Done. Inspect Parquet under " + dataDir.toAbsolutePath());
-        System.out.println("Inspect reports under " + reportDir.toAbsolutePath());
-    }
-
-    private static String envOr(String key, String defaultValue) {
-        String value = System.getenv(key);
-        return (value == null || value.isBlank()) ? defaultValue : value;
+        System.out.println("Done. Inspect reports under " + reportDir.toAbsolutePath());
     }
 }
