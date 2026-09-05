@@ -32,6 +32,10 @@ run_query() {
   docker compose run --rm play-duckdb query
 }
 
+run_layers() {
+  docker compose run --rm play-duckdb layers
+}
+
 run_report() {
   docker compose run --rm play-duckdb report
 }
@@ -43,16 +47,20 @@ case "$STAGE" in
   query)
     run_query
     ;;
+  layers)
+    run_layers
+    ;;
   report)
     run_report
     ;;
   all)
     run_seed
     run_query
+    run_layers
     run_report
     ;;
   *)
-    echo "Use: all | seed | query | report" >&2
+    echo "Use: all | seed | query | layers | report" >&2
     exit 1
     ;;
 esac

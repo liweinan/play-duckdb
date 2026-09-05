@@ -39,24 +39,50 @@ public final class DuckDb {
         return DriverManager.getConnection("jdbc:duckdb:");
     }
 
-    /** Execute a SQL script that may contain multiple statements separated by ';'. */
-    public static void executeScript(Connection connection, String sql) throws SQLException {
-        // DuckDB JDBC accepts multi-statement scripts on a single Statement in many cases,
-        // but splitting keeps error messages easier to map to a statement.
-        String[] parts = sql.split(";");
+    /**
+     * Run a multi-statement script: print {@code SELECT}/{@code WITH}, execute the rest.
+     * Full-line {@code --} comments are stripped so a comment above a SELECT is not skipped.
+     */
+    public static void runScript(Connection connection, String script) throws SQLException {
         try (Statement statement = connection.createStatement()) {
-            for (String part : parts) {
-                String trimmed = part.trim();
-                if (trimmed.isEmpty() || trimmed.startsWith("--")) {
+            for (String part : script.split(";")) {
+                String sql = stripLineComments(part).trim();
+                if (sql.isEmpty()) {
                     continue;
                 }
-                // Skip pure comment blocks
-                if (trimmed.lines().allMatch(line -> line.trim().isEmpty() || line.trim().startsWith("--"))) {
+                String lower = sql.toLowerCase();
+                if (lower.startsWith("select") || lower.startsWith("with")) {
+                    printQuery(connection, sql);
+                } else {
+                    statement.execute(sql);
+                }
+            }
+        }
+    }
+
+    /** Execute every statement in a script (no result printing). */
+    public static void executeScript(Connection connection, String sql) throws SQLException {
+        try (Statement statement = connection.createStatement()) {
+            for (String part : sql.split(";")) {
+                String trimmed = stripLineComments(part).trim();
+                if (trimmed.isEmpty()) {
                     continue;
                 }
                 statement.execute(trimmed);
             }
         }
+    }
+
+    static String stripLineComments(String sql) {
+        StringBuilder builder = new StringBuilder();
+        for (String line : sql.split("\n", -1)) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty() || trimmed.startsWith("--")) {
+                continue;
+            }
+            builder.append(line).append('\n');
+        }
+        return builder.toString();
     }
 
     /** Pretty-print a query result to stdout (for interactive learning). */

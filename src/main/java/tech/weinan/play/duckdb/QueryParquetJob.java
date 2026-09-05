@@ -3,7 +3,6 @@ package tech.weinan.play.duckdb;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
-import java.sql.Statement;
 
 /**
  * Stage 2 — Query Iceberg with DuckDB.
@@ -23,27 +22,13 @@ public final class QueryParquetJob {
     public void run() throws Exception {
         System.out.println("[query] Scanning Iceberg with DuckDB...");
 
-        try (Connection connection = DuckDb.openInMemory();
-             Statement statement = connection.createStatement()) {
-
+        try (Connection connection = DuckDb.openInMemory()) {
             IcebergTables.createViews(connection);
 
             Path demoSql = sqlDir.resolve("02_analytics.sql");
             if (Files.isRegularFile(demoSql)) {
                 System.out.println("[query] Executing " + demoSql.toAbsolutePath());
-                String script = Files.readString(demoSql);
-                for (String part : script.split(";")) {
-                    String sql = stripLineComments(part).trim();
-                    if (sql.isEmpty()) {
-                        continue;
-                    }
-                    String lower = sql.toLowerCase();
-                    if (lower.startsWith("select") || lower.startsWith("with")) {
-                        DuckDb.printQuery(connection, sql);
-                    } else {
-                        statement.execute(sql);
-                    }
-                }
+                DuckDb.runScript(connection, Files.readString(demoSql));
             } else {
                 DuckDb.printQuery(connection, """
                         SELECT as_of_date, asset_type, ROUND(SUM(market_value), 2) AS total_mv
@@ -66,17 +51,5 @@ public final class QueryParquetJob {
         }
 
         System.out.println("[query] Done. Views hid Iceberg metadata paths from the query author.");
-    }
-
-    private static String stripLineComments(String sql) {
-        StringBuilder builder = new StringBuilder();
-        for (String line : sql.split("\n", -1)) {
-            String trimmed = line.trim();
-            if (trimmed.isEmpty() || trimmed.startsWith("--")) {
-                continue;
-            }
-            builder.append(line).append('\n');
-        }
-        return builder.toString();
     }
 }

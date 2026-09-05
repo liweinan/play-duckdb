@@ -11,8 +11,9 @@ import java.util.Locale;
  * <p>Stages:
  * <ol>
  *   <li>{@code query}  — DuckDB analytics over Iceberg (pointer from Postgres)</li>
+ *   <li>{@code layers} — named VIEW / TEMP TABLE teaching script</li>
  *   <li>{@code report} — CSV aggregations via Java JDBC</li>
- *   <li>{@code all}    — query → report</li>
+ *   <li>{@code all}    — query → layers → report</li>
  * </ol>
  *
  * <p>{@code seed} is Spark, not this JAR. Use {@code ./run.sh seed}.
@@ -43,14 +44,16 @@ public final class App {
                 System.exit(1);
             }
             case "query" -> new QueryParquetJob(sqlDir).run();
+            case "layers" -> new LayeredAnalyticsJob(sqlDir, reportDir).run();
             case "report" -> new ReportJob(reportDir).run();
             case "all" -> {
                 new QueryParquetJob(sqlDir).run();
+                new LayeredAnalyticsJob(sqlDir, reportDir).run();
                 new ReportJob(reportDir).run();
             }
             default -> {
                 System.err.println("Unknown stage: " + stage);
-                System.err.println("Use: all | query | report");
+                System.err.println("Use: all | query | layers | report");
                 System.err.println("Seed Iceberg tables with: ./run.sh seed");
                 System.exit(1);
             }

@@ -27,7 +27,8 @@ All data is fictional. No real systems, products, or client data.
 2. Object files (metadata + Parquet) live on **MinIO**
 3. DuckDB scans the **exact** `metadata.json` from that pointer — not the table directory
 4. Drive the engine from **Java JDBC** and export CSV reports
-5. Run the stack with **Docker Compose**
+5. Split analytics into **named VIEW / TEMP TABLE layers** (`sql/03_layered.sql`)
+6. Run the stack with **Docker Compose**
 
 ---
 
@@ -57,9 +58,10 @@ docker compose run --rm play-duckdb report
 
 | Command | Meaning |
 |---------|---------|
-| `./run.sh all` | seed → query → report |
+| `./run.sh all` | seed → query → layers → report |
 | `./run.sh seed` | Spark writes Iceberg to MinIO + Postgres |
 | `./run.sh query` | DuckDB analytics SQL |
+| `./run.sh layers` | named VIEW / TEMP TABLE teaching script |
 | `./run.sh report` | write CSV under `reports/` |
 
 Ports:
@@ -71,6 +73,7 @@ Outputs:
 
 - `reports/report_inventory_by_asset_*.csv`
 - `reports/report_open_loans_*.csv`
+- `reports/report_layered_open_loans_*.csv`（`layers` 阶段）
 
 Inspect the catalog pointer:
 
@@ -96,13 +99,15 @@ play-duckdb/
 │   └── jobs/seed_iceberg.py
 ├── sql/
 │   ├── 01_concepts.sql
-│   └── 02_analytics.sql
+│   ├── 02_analytics.sql
+│   └── 03_layered.sql
 ├── docs/LEARNING_PATH.md
 └── src/main/java/tech/weinan/play/duckdb/
     ├── App.java
     ├── DuckDb.java
     ├── IcebergTables.java
     ├── QueryParquetJob.java
+    ├── LayeredAnalyticsJob.java
     └── ReportJob.java
 ```
 
@@ -131,10 +136,13 @@ java -jar target/play-duckdb-1.0.0.jar query
 seed_iceberg.py  ->  Iceberg tables (Spark + JdbcCatalog)
        |
        v
-QueryParquetJob  ->  Postgres pointer + iceberg_scan + VIEW + analytics SQL
+QueryParquetJob      ->  Postgres pointer + iceberg_scan + VIEW + analytics SQL
        |
        v
-ReportJob        ->  aggregations to CSV
+LayeredAnalyticsJob  ->  named layers (03_layered.sql) + checksum + CSV
+       |
+       v
+ReportJob            ->  aggregations to CSV
 ```
 
 ---

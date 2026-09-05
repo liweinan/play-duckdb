@@ -9,6 +9,7 @@
 | Spark 写湖仓表 | `spark/jobs/seed_iceberg.py`：JdbcCatalog + MinIO |
 | Catalog 指针 | Postgres `iceberg_tables.metadata_location` |
 | DuckDB runtime 查询 | `QueryParquetJob` + `sql/02_analytics.sql` |
+| 分层 SQL | `LayeredAnalyticsJob` + `sql/03_layered.sql` |
 | 逻辑层隔离 | SQL `VIEW` 隐藏 metadata 路径 |
 | Java 读数出报表 | `ReportJob`：JDBC + `COPY` 出 CSV |
 
@@ -47,6 +48,24 @@
 ### 4. Catalog 在干什么
 
 Iceberg catalog 只保管「当前 metadata.json 地址」这一枚可变指针。数据文件写出后不改。Spark commit 用 Postgres 事务切换指针；DuckDB 读同一枚指针，才能和 Spark 看到同一个 current snapshot。
+
+### 5. 分层 SQL（`./run.sh layers`）
+
+对照 [`sql/03_layered.sql`](../sql/03_layered.sql)。文件开头的巨型 `WITH` 是**反例（不执行）**：最新日、OPEN 过滤、JOIN、两份报表揉在一起，出错时无法问「是 OPEN 口径丢了行，还是 JOIN 炸了」。
+
+实际执行的是按**业务名字**拆开的层：
+
+| 层 | 对象 | 为何这种形式 |
+|----|------|----------------|
+| 源 | `v_collateral_position` / `v_securities_loan` | Java 扫 Iceberg，藏 S3 路径 |
+| 语义 | `v_latest_as_of` / `v_latest_positions` / `v_open_loans` | VIEW。口径只写一处；DuckDB 仍可内联 |
+| 复用 | `t_open_loans_enriched` | TEMP TABLE。对账和下方两份输出都读它，只 JOIN 一次 |
+| 对账 | `SELECT step, n, qty, mv` | 每层后打行数 / 数量 / 市值 |
+| 报表 | 薄 `SELECT` | 不再写 JOIN，口径对齐 `ReportJob` |
+
+不要为了「看起来像步骤」把每一层都 `CREATE TABLE`。VIEW/CTE 会被内联；该物化的是贵且复用、或必须对账的那一层。`OPEN` 的定义只放在 `v_open_loans`。
+
+跑完看 stdout 的 checksum，以及 `reports/report_layered_open_loans_*.csv`。
 
 ## 常用 DuckDB SQL 片段
 

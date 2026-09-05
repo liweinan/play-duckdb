@@ -19,4 +19,9 @@
 --
 -- Do not iceberg_scan the table root directory: JdbcCatalog does not write
 -- version-hint.text. The catalog pointer in Postgres is the current snapshot.
+--
+-- Layered SQL (see 03_layered.sql):
+--   VIEW        = named logical step; DuckDB can still inline it
+--   TEMP TABLE  = materialize only when the layer is reused or must be checksummed
+--   Do not fold latest-date + OPEN + join + two reports into one WITH
 -- =============================================================================
