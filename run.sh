@@ -8,7 +8,10 @@ cd "$(dirname "$0")"
 
 # Local macOS + Clash. GitHub Actions sets CI=true — do not force :7890.
 if [[ "${CI:-}" == "true" ]]; then
-  unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
+  export http_proxy=""
+  export https_proxy=""
+  export HTTP_PROXY=""
+  export HTTPS_PROXY=""
   export BUILD_HTTP_PROXY=""
   export BUILD_HTTPS_PROXY=""
   export NO_PROXY="${NO_PROXY:-*}"
