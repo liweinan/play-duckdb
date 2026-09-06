@@ -9,6 +9,7 @@ on:
 jobs:
   build-and-run:
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -20,5 +21,23 @@ jobs:
           java-version: "17"
           cache: maven
 
-      - name: Build
+      - name: Compile
         run: mvn -B -DskipTests package
+
+      - name: Compose seed → query → layers → report
+        run: ./run.sh all
+
+      - name: Verify reports
+        run: |
+          set -euo pipefail
+          ls -la reports/
+          inv=$(ls -1t reports/report_inventory_by_asset_*.csv | head -1)
+          loans=$(ls -1t reports/report_open_loans_*.csv | head -1)
+          layered=$(ls -1t reports/report_layered_open_loans_*.csv | head -1)
+          test "$(wc -l < "$inv")" -eq 5
+          test "$(wc -l < "$loans")" -eq 3
+          test "$(wc -l < "$layered")" -eq 4
+          grep -q '2026-08-02,BOND,1,1230000.0,CNY' "$inv"
+          grep -q '2026-08-01,2,150.0,27.5' "$loans"
+          grep -q 'L-1,ACC-A,ACC-B,EQ-HK-88,100.0,35.0,OPEN,480.0,400000.0' "$layered"
+          echo "reports ok: $inv $loans $layered"

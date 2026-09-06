@@ -6,13 +6,21 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-export http_proxy="${http_proxy:-http://127.0.0.1:7890}"
-export https_proxy="${https_proxy:-http://127.0.0.1:7890}"
-export HTTP_PROXY="${HTTP_PROXY:-http://127.0.0.1:7890}"
-export HTTPS_PROXY="${HTTPS_PROXY:-http://127.0.0.1:7890}"
-export BUILD_HTTP_PROXY="${BUILD_HTTP_PROXY:-http://host.docker.internal:7890}"
-export BUILD_HTTPS_PROXY="${BUILD_HTTPS_PROXY:-http://host.docker.internal:7890}"
-export NO_PROXY="${NO_PROXY:-localhost,127.0.0.1,host.docker.internal,postgres,minio,spark}"
+# Local macOS + Clash. GitHub Actions sets CI=true — do not force :7890.
+if [[ "${CI:-}" == "true" ]]; then
+  unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
+  export BUILD_HTTP_PROXY=""
+  export BUILD_HTTPS_PROXY=""
+  export NO_PROXY="${NO_PROXY:-*}"
+else
+  export http_proxy="${http_proxy:-http://127.0.0.1:7890}"
+  export https_proxy="${https_proxy:-http://127.0.0.1:7890}"
+  export HTTP_PROXY="${HTTP_PROXY:-http://127.0.0.1:7890}"
+  export HTTPS_PROXY="${HTTPS_PROXY:-http://127.0.0.1:7890}"
+  export BUILD_HTTP_PROXY="${BUILD_HTTP_PROXY:-http://host.docker.internal:7890}"
+  export BUILD_HTTPS_PROXY="${BUILD_HTTPS_PROXY:-http://host.docker.internal:7890}"
+  export NO_PROXY="${NO_PROXY:-localhost,127.0.0.1,host.docker.internal,postgres,minio,spark}"
+fi
 
 STAGE="all"
 for arg in "$@"; do

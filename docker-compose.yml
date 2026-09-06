@@ -85,9 +85,9 @@ services:
       context: ./spark
       dockerfile: Dockerfile
       args:
-        HTTP_PROXY: ${BUILD_HTTP_PROXY:-http://host.docker.internal:7890}
-        HTTPS_PROXY: ${BUILD_HTTPS_PROXY:-http://host.docker.internal:7890}
-        NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,host.docker.internal}
+        HTTP_PROXY: ${BUILD_HTTP_PROXY-http://host.docker.internal:7890}
+        HTTPS_PROXY: ${BUILD_HTTPS_PROXY-http://host.docker.internal:7890}
+        NO_PROXY: ${NO_PROXY-localhost,127.0.0.1,host.docker.internal}
     image: play-duckdb-spark:local
     depends_on:
       postgres:
@@ -114,9 +114,9 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        HTTP_PROXY: ${BUILD_HTTP_PROXY:-http://host.docker.internal:7890}
-        HTTPS_PROXY: ${BUILD_HTTPS_PROXY:-http://host.docker.internal:7890}
-        NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,host.docker.internal}
+        HTTP_PROXY: ${BUILD_HTTP_PROXY-http://host.docker.internal:7890}
+        HTTPS_PROXY: ${BUILD_HTTPS_PROXY-http://host.docker.internal:7890}
+        NO_PROXY: ${NO_PROXY-localhost,127.0.0.1,host.docker.internal}
     image: play-duckdb:local
     depends_on:
       postgres:
@@ -137,10 +137,10 @@ services:
       S3_ACCESS_KEY: admin
       S3_SECRET_KEY: password
       S3_REGION: us-east-1
-      HTTP_PROXY: ${BUILD_HTTP_PROXY:-http://host.docker.internal:7890}
-      HTTPS_PROXY: ${BUILD_HTTPS_PROXY:-http://host.docker.internal:7890}
-      http_proxy: ${BUILD_HTTP_PROXY:-http://host.docker.internal:7890}
-      https_proxy: ${BUILD_HTTPS_PROXY:-http://host.docker.internal:7890}
+      HTTP_PROXY: ${BUILD_HTTP_PROXY-http://host.docker.internal:7890}
+      HTTPS_PROXY: ${BUILD_HTTPS_PROXY-http://host.docker.internal:7890}
+      http_proxy: ${BUILD_HTTP_PROXY-http://host.docker.internal:7890}
+      https_proxy: ${BUILD_HTTPS_PROXY-http://host.docker.internal:7890}
       NO_PROXY: minio,postgres,spark,localhost,127.0.0.1
       no_proxy: minio,postgres,spark,localhost,127.0.0.1
     extra_hosts:
