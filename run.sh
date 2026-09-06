@@ -14,30 +14,45 @@ export BUILD_HTTP_PROXY="${BUILD_HTTP_PROXY:-http://host.docker.internal:7890}"
 export BUILD_HTTPS_PROXY="${BUILD_HTTPS_PROXY:-http://host.docker.internal:7890}"
 export NO_PROXY="${NO_PROXY:-localhost,127.0.0.1,host.docker.internal,postgres,minio,spark}"
 
-STAGE="${1:-all}"
+STAGE="all"
+for arg in "$@"; do
+  case "$arg" in
+    --observe|-o)
+      export OBSERVE=1
+      ;;
+    all|seed|query|layers|report)
+      STAGE="$arg"
+      ;;
+    *)
+      echo "Use: all | seed | query | layers | report  [--observe]" >&2
+      exit 1
+      ;;
+  esac
+done
 
 mkdir -p reports
 
 echo "HTTP_PROXY=$HTTP_PROXY (docker pull)"
 echo "BUILD_HTTP_PROXY=$BUILD_HTTP_PROXY (image build/run)"
 echo "Stage: $STAGE"
+echo "OBSERVE: ${OBSERVE:-off}"
 
 docker compose build
 
 run_seed() {
-  docker compose run --rm spark
+  docker compose run --rm -e OBSERVE="${OBSERVE:-}" spark
 }
 
 run_query() {
-  docker compose run --rm play-duckdb query
+  docker compose run --rm -e OBSERVE="${OBSERVE:-}" play-duckdb query ${OBSERVE:+--observe}
 }
 
 run_layers() {
-  docker compose run --rm play-duckdb layers
+  docker compose run --rm -e OBSERVE="${OBSERVE:-}" play-duckdb layers ${OBSERVE:+--observe}
 }
 
 run_report() {
-  docker compose run --rm play-duckdb report
+  docker compose run --rm -e OBSERVE="${OBSERVE:-}" play-duckdb report ${OBSERVE:+--observe}
 }
 
 case "$STAGE" in
@@ -60,7 +75,7 @@ case "$STAGE" in
     run_report
     ;;
   *)
-    echo "Use: all | seed | query | layers | report" >&2
+    echo "Use: all | seed | query | layers | report  [--observe]" >&2
     exit 1
     ;;
 esac

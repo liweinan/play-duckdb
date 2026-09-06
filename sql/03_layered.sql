@@ -21,6 +21,9 @@
 --   debug      SELECT step, n, qty/mv after each layer
 --   report     thin SELECT from the named layers (same grain as ReportJob)
 --
+-- With OBSERVE=1 or --observe, Java also dumps Iceberg snapshots / manifests
+-- and SELECT * from each named layer (demo-sized tables only).
+--
 -- Fictional demo data only. OPEN / latest as_of_date are practice labels.
 -- =============================================================================
 

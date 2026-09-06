@@ -1,5 +1,7 @@
 """Write the play-duckdb sample tables as Iceberg via Spark JdbcCatalog."""
 
+import os
+
 from pyspark.sql import SparkSession
 
 POSITION = "demo.demo.collateral_position"
@@ -84,7 +86,27 @@ def main() -> None:
         """
     ).show(truncate=False)
 
+    observe_iceberg(spark, POSITION)
+    observe_iceberg(spark, LOAN)
+
     spark.stop()
+
+
+def observe_enabled() -> bool:
+    value = os.environ.get("OBSERVE", "")
+    return value.lower() in {"1", "true", "yes", "on"}
+
+
+def observe_iceberg(spark: SparkSession, table: str) -> None:
+    if not observe_enabled():
+        return
+    print()
+    print(f"======== observe: Spark Iceberg metadata — {table} ========")
+    for suffix in (".history", ".snapshots", ".files", ".manifests", ".partitions"):
+        print(f"-- {table}{suffix}")
+        spark.sql(f"SELECT * FROM {table}{suffix}").show(truncate=False)
+    print(f"-- {table} rows")
+    spark.sql(f"SELECT * FROM {table} ORDER BY as_of_date").show(truncate=False)
 
 
 if __name__ == "__main__":

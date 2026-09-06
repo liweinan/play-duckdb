@@ -28,7 +28,8 @@ All data is fictional. No real systems, products, or client data.
 3. DuckDB scans the **exact** `metadata.json` from that pointer — not the table directory
 4. Drive the engine from **Java JDBC** and export CSV reports
 5. Split analytics into **named VIEW / TEMP TABLE layers** (`sql/03_layered.sql`)
-6. Run the stack with **Docker Compose**
+6. Turn on **`--observe`** for Iceberg snapshots/files and layer row dumps
+7. Run the stack with **Docker Compose**
 
 ---
 
@@ -63,6 +64,8 @@ docker compose run --rm play-duckdb report
 | `./run.sh query` | DuckDB analytics SQL |
 | `./run.sh layers` | named VIEW / TEMP TABLE teaching script |
 | `./run.sh report` | write CSV under `reports/` |
+| `./run.sh all --observe` | same stages, plus Iceberg / layer dumps |
+| `OBSERVE=1 ./run.sh layers` | same as `--observe` |
 
 Ports:
 
@@ -106,6 +109,7 @@ play-duckdb/
     ├── App.java
     ├── DuckDb.java
     ├── IcebergTables.java
+    ├── Observe.java
     ├── QueryParquetJob.java
     ├── LayeredAnalyticsJob.java
     └── ReportJob.java
@@ -124,6 +128,7 @@ export PG_PASSWORD=iceberg
 export S3_ENDPOINT=localhost:9000
 mvn -q -DskipTests package
 java -jar target/play-duckdb-1.0.0.jar query
+java -jar target/play-duckdb-1.0.0.jar layers --observe
 ```
 
 `java -jar ... seed` is not supported. Seed is Spark: `./run.sh seed`.

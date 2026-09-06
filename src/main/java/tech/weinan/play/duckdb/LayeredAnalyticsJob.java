@@ -42,6 +42,7 @@ public final class LayeredAnalyticsJob {
             IcebergTables.createViews(connection);
             System.out.println("[layers] Executing " + layeredSql.toAbsolutePath());
             DuckDb.runScript(connection, Files.readString(layeredSql));
+            observeLayers(connection);
 
             statement.execute("""
                     COPY (
@@ -53,6 +54,20 @@ public final class LayeredAnalyticsJob {
         }
 
         System.out.println("[layers] Wrote " + enrichedCsv.toAbsolutePath());
+    }
+
+    private static void observeLayers(Connection connection) throws Exception {
+        if (!Observe.enabled()) {
+            return;
+        }
+        Observe.banner("layer rows — v_latest_as_of");
+        DuckDb.printQuery(connection, "SELECT * FROM v_latest_as_of");
+        Observe.banner("layer rows — v_latest_positions");
+        DuckDb.printQuery(connection, "SELECT * FROM v_latest_positions ORDER BY account_id, instrument_id");
+        Observe.banner("layer rows — v_open_loans");
+        DuckDb.printQuery(connection, "SELECT * FROM v_open_loans ORDER BY as_of_date, loan_id");
+        Observe.banner("layer rows — t_open_loans_enriched");
+        DuckDb.printQuery(connection, "SELECT * FROM t_open_loans_enriched ORDER BY as_of_date, loan_id");
     }
 
     private static String sqlPath(Path path) {

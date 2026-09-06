@@ -24,4 +24,7 @@
 --   VIEW        = named logical step; DuckDB can still inline it
 --   TEMP TABLE  = materialize only when the layer is reused or must be checksummed
 --   Do not fold latest-date + OPEN + join + two reports into one WITH
+--
+-- Observe (OBSERVE=1 or --observe): dump Iceberg snapshots / manifests / files
+-- and SELECT * from named layers. Demo tables only.
 -- =============================================================================

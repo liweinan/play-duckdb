@@ -67,6 +67,14 @@ Iceberg catalog 只保管「当前 metadata.json 地址」这一枚可变指针�
 
 跑完看 stdout 的 checksum，以及 `reports/report_layered_open_loans_*.csv`。
 
+要看每一层的全量行，以及 DuckDB 从 Iceberg 读到的 snapshot / manifest / data file：
+
+```bash
+./run.sh layers --observe
+```
+
+或 `OBSERVE=1 ./run.sh all`。默认关闭；打开后 stdout 会多出 `======== observe: … ========` 段（样例表很小才 `SELECT *`）。
+
 ## 常用 DuckDB SQL 片段
 
 ```sql

@@ -95,6 +95,7 @@ services:
       create-bucket:
         condition: service_completed_successfully
     environment:
+      OBSERVE: ${OBSERVE:-}
       AWS_REGION: us-east-1
       AWS_ACCESS_KEY_ID: admin
       AWS_SECRET_ACCESS_KEY: password
@@ -126,6 +127,7 @@ services:
       - ./reports:/app/reports
       - ./sql:/app/sql:ro
     environment:
+      OBSERVE: ${OBSERVE:-}
       REPORT_DIR: /app/reports
       SQL_DIR: /app/sql
       PG_JDBC_URL: jdbc:postgresql://postgres:5432/iceberg

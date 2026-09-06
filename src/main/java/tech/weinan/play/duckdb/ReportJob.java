@@ -29,6 +29,7 @@ public final class ReportJob {
              Statement statement = connection.createStatement()) {
 
             IcebergTables.createViews(connection);
+            observeReports(connection);
 
             Path inventoryCsv = reportDir.resolve("report_inventory_by_asset_" + stamp + ".csv");
             statement.execute("""
@@ -83,6 +84,38 @@ public final class ReportJob {
             System.out.println("  - " + inventoryCsv.toAbsolutePath());
             System.out.println("  - " + loanCsv.toAbsolutePath());
         }
+    }
+
+    private static void observeReports(Connection connection) throws Exception {
+        if (!Observe.enabled()) {
+            return;
+        }
+        Observe.banner("report rows — inventory by asset (latest as_of)");
+        DuckDb.printQuery(connection, """
+                WITH latest AS (
+                  SELECT MAX(as_of_date) AS d FROM v_collateral_position
+                )
+                SELECT p.as_of_date,
+                       p.asset_type,
+                       COUNT(*) AS position_count,
+                       ROUND(SUM(p.market_value), 2) AS total_market_value,
+                       p.currency
+                FROM v_collateral_position p, latest
+                WHERE p.as_of_date = latest.d
+                GROUP BY p.as_of_date, p.asset_type, p.currency
+                ORDER BY p.asset_type, p.currency
+                """);
+        Observe.banner("report rows — open loans by date");
+        DuckDb.printQuery(connection, """
+                SELECT as_of_date,
+                       COUNT(*) AS open_loan_count,
+                       ROUND(SUM(quantity), 2) AS total_qty,
+                       ROUND(AVG(fee_bps), 2) AS avg_fee_bps
+                FROM v_securities_loan
+                WHERE status = 'OPEN'
+                GROUP BY as_of_date
+                ORDER BY as_of_date
+                """);
     }
 
     private static String sqlPath(Path path) {

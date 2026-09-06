@@ -21,6 +21,8 @@ public final class IcebergTables {
     static final String COLLATERAL_POSITION = "collateral_position";
     static final String SECURITIES_LOAN = "securities_loan";
 
+    private static boolean icebergObserved;
+
     private IcebergTables() {
     }
 
@@ -100,6 +102,69 @@ public final class IcebergTables {
         Map<String, String> locations = metadataLocations();
         createScanView(duckDb, "v_collateral_position", locations.get(COLLATERAL_POSITION));
         createScanView(duckDb, "v_securities_loan", locations.get(SECURITIES_LOAN));
+        if (Observe.enabled()) {
+            observeIceberg(duckDb, locations);
+        }
+    }
+
+    /**
+     * Catalog pointer, Iceberg snapshots/manifests, and the rows DuckDB will scan.
+     * Demo tables are tiny; do not copy this {@code SELECT *} onto a large lake.
+     */
+    static void observeIceberg(Connection duckDb, Map<String, String> locations) throws SQLException {
+        if (icebergObserved) {
+            return;
+        }
+        icebergObserved = true;
+        Observe.banner("Iceberg catalog pointers (Postgres iceberg_tables)");
+        for (Map.Entry<String, String> entry : locations.entrySet()) {
+            IcebergScanTarget target = scanTarget(entry.getValue());
+            System.out.println("table=" + entry.getKey()
+                    + " metadata_location=" + entry.getValue()
+                    + " table_root=" + target.tableRoot()
+                    + " version=" + target.version());
+        }
+
+        observeIcebergTable(duckDb, COLLATERAL_POSITION, locations.get(COLLATERAL_POSITION), "v_collateral_position");
+        observeIcebergTable(duckDb, SECURITIES_LOAN, locations.get(SECURITIES_LOAN), "v_securities_loan");
+    }
+
+    private static void observeIcebergTable(
+            Connection duckDb, String tableName, String metadataLocation, String viewName)
+            throws SQLException {
+        IcebergScanTarget target = scanTarget(metadataLocation);
+        String root = escapeLiteral(target.tableRoot());
+        String version = escapeLiteral(target.version());
+
+        Observe.banner("Iceberg snapshots — " + tableName);
+        printObserveQuery(duckDb, """
+                SELECT *
+                FROM iceberg_snapshots('%s', version = '%s')
+                """.formatted(root, version));
+
+        Observe.banner("Iceberg manifests / data files — " + tableName);
+        printObserveQuery(duckDb, """
+                SELECT *
+                FROM iceberg_metadata('%s', version = '%s', allow_moved_paths = true)
+                """.formatted(root, version));
+
+        Observe.banner("Iceberg column stats per data file — " + tableName);
+        printObserveQuery(duckDb, """
+                SELECT *
+                FROM iceberg_column_stats('%s', version = '%s', allow_moved_paths = true)
+                """.formatted(root, version));
+
+        Observe.banner("Rows DuckDB reads from Iceberg — " + viewName);
+        printObserveQuery(duckDb, "SELECT * FROM " + viewName);
+    }
+
+    private static void printObserveQuery(Connection duckDb, String sql) throws SQLException {
+        try {
+            DuckDb.printQuery(duckDb, sql);
+        } catch (SQLException e) {
+            System.out.println("[observe] query failed: " + e.getMessage());
+            System.out.println();
+        }
     }
 
     private static void createScanView(Connection duckDb, String viewName, String metadataLocation)

@@ -21,7 +21,14 @@ import java.util.Locale;
 public final class App {
 
     public static void main(String[] args) throws Exception {
-        String stage = args.length == 0 ? "all" : args[0].trim().toLowerCase(Locale.ROOT);
+        String stage = "all";
+        for (String arg : args) {
+            if ("--observe".equals(arg) || "-o".equals(arg)) {
+                Observe.enableFromCli();
+            } else {
+                stage = arg.trim().toLowerCase(Locale.ROOT);
+            }
+        }
 
         Path reportDir = Path.of(IcebergTables.envOr("REPORT_DIR", "reports"));
         Path sqlDir = Path.of(IcebergTables.envOr("SQL_DIR", "sql"));
@@ -30,6 +37,7 @@ public final class App {
         System.out.println("=== play-duckdb ===");
         System.out.println("REPORT_DIR = " + reportDir.toAbsolutePath());
         System.out.println("STAGE      = " + stage);
+        System.out.println("OBSERVE    = " + (Observe.enabled() ? "on" : "off"));
         System.out.println();
 
         switch (stage) {
