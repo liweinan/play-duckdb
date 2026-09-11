@@ -41,7 +41,7 @@ jobs:
         run: |
           set -euo pipefail
           ls -la reports/
-          grep -q '\[nomad\] spark-worker running=2' /tmp/play-duckdb-run.log
+          grep -q 'spark-worker running=2' /tmp/play-duckdb-run.log
           inv=$(ls -1t reports/report_inventory_by_asset_*.csv | head -1)
           loans=$(ls -1t reports/report_open_loans_*.csv | head -1)
           layered=$(ls -1t reports/report_layered_open_loans_*.csv | head -1)
