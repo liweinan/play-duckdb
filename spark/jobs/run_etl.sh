@@ -16,6 +16,9 @@ if [[ -n "${DRIVER_HOST}" ]]; then
     --conf "spark.executor.memoryOverhead=128m"
     --conf "spark.executor.cores=1"
     --conf "spark.cores.max=2"
+    --conf "spark.executorEnv.AWS_REGION=us-east-1"
+    --conf "spark.executorEnv.AWS_ACCESS_KEY_ID=admin"
+    --conf "spark.executorEnv.AWS_SECRET_ACCESS_KEY=password"
   )
 fi
 

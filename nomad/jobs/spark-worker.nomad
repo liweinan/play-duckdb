@@ -34,6 +34,10 @@ job "spark-worker" {
         no_proxy             = "minio,postgres,spark-master,spark-etl,localhost,127.0.0.1"
         SPARK_WORKER_MEMORY  = "1g"
         SPARK_WORKER_CORES   = "1"
+        AWS_REGION           = "us-east-1"
+        AWS_ACCESS_KEY_ID    = "admin"
+        AWS_SECRET_ACCESS_KEY = "password"
+        AWS_S3_ENDPOINT      = "http://minio:9000"
       }
 
       resources {
