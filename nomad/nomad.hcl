@@ -1,16 +1,4 @@
-# Extra client settings on top of `nomad agent -dev`.
+# Used with `nomad agent -dev`. data_dir must exist on the Docker *host*
+# (bind-mounted) so the docker driver can mount alloc dirs.
+data_dir  = "/nomad/data"
 bind_addr = "0.0.0.0"
-
-client {
-  options = {
-    "driver.allowlist" = "docker"
-  }
-}
-
-plugin "docker" {
-  config {
-    volumes {
-      enabled = true
-    }
-  }
-}

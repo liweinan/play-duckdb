@@ -53,8 +53,16 @@ echo "NOMAD_SPARK_WORKERS: $WORKERS"
 
 docker compose build
 
+JOB_DIR="/opt/nomad/jobs"
 nomad_exec() {
   docker compose exec -T nomad nomad "$@"
+}
+
+use_host_nomad() {
+  JOB_DIR="$(pwd)/nomad/jobs"
+  nomad_exec() {
+    nomad "$@"
+  }
 }
 
 nomad_summary_field() {
@@ -118,19 +126,61 @@ wait_nomad_batch() {
   return 1
 }
 
+start_nomad_host() {
+  use_host_nomad
+  export NOMAD_ADDR="${NOMAD_HTTP}"
+  mkdir -p /tmp/play-duckdb-nomad
+  if curl -sf "${NOMAD_HTTP}/v1/status/leader" >/dev/null; then
+    echo "[nomad] host agent already up"
+    return 0
+  fi
+  echo "[nomad] starting host agent -dev"
+  nomad agent -dev -bind=0.0.0.0 -data-dir=/tmp/play-duckdb-nomad \
+    > /tmp/play-duckdb-nomad-agent.log 2>&1 &
+  echo $! > /tmp/play-duckdb-nomad-agent.pid
+  local i=0
+  while (( i < 60 )); do
+    if curl -sf "${NOMAD_HTTP}/v1/status/leader" >/dev/null; then
+      echo "[nomad] host agent ready"
+      return 0
+    fi
+    sleep 1
+    i=$((i + 1))
+  done
+  echo "[nomad] host agent failed to become ready" >&2
+  cat /tmp/play-duckdb-nomad-agent.log >&2 || true
+  return 1
+}
+
+start_nomad_compose() {
+  mkdir -p /tmp/play-duckdb-nomad
+  if ! docker compose up -d --wait postgres minio nomad; then
+    echo "[nomad] compose up failed" >&2
+    docker compose logs nomad || true
+    docker compose ps -a || true
+    return 1
+  fi
+}
+
 run_seed() {
-  docker compose up -d --wait postgres minio nomad
+  docker compose up -d --wait postgres minio
   docker compose run --rm create-bucket
 
-  nomad_exec job run /opt/nomad/jobs/spark-master.nomad
+  if [[ "${CI:-}" == "true" ]] && command -v nomad >/dev/null 2>&1; then
+    start_nomad_host
+  else
+    start_nomad_compose
+  fi
+
+  nomad_exec job run "${JOB_DIR}/spark-master.nomad"
   wait_nomad_running spark-master master 1
 
-  nomad_exec job run -var="workers=${WORKERS}" /opt/nomad/jobs/spark-worker.nomad
+  nomad_exec job run -var="workers=${WORKERS}" "${JOB_DIR}/spark-worker.nomad"
   wait_nomad_running spark-worker worker "$WORKERS"
   echo "[nomad] spark-worker running=${WORKERS}"
 
   nomad_exec job stop -purge spark-etl >/dev/null 2>&1 || true
-  nomad_exec job run -var="observe=${OBSERVE:-}" /opt/nomad/jobs/spark-etl.nomad
+  nomad_exec job run -var="observe=${OBSERVE:-}" "${JOB_DIR}/spark-etl.nomad"
   wait_nomad_batch spark-etl etl
 
   if [[ "${OBSERVE:-}" == "1" ]]; then

@@ -24,6 +24,14 @@ jobs:
       - name: Compile
         run: mvn -B -DskipTests package
 
+      - name: Install Nomad
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/nomad.zip \
+            https://releases.hashicorp.com/nomad/1.9.7/nomad_1.9.7_linux_amd64.zip
+          sudo unzip -o /tmp/nomad.zip -d /usr/local/bin
+          nomad version
+
       - name: Compose seed → query → layers → report
         run: |
           set -o pipefail

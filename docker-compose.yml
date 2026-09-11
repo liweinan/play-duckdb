@@ -85,13 +85,15 @@ services:
     image: hashicorp/nomad:1.9.7
     user: root
     privileged: true
-    command: ["agent", "-dev", "-bind=0.0.0.0", "-network-interface=eth0", "-config=/etc/nomad.d/nomad.hcl"]
+    cgroup: host
+    command: ["agent", "-dev", "-bind=0.0.0.0", "-data-dir=/nomad/data"]
     depends_on:
       postgres:
         condition: service_healthy
       minio:
         condition: service_healthy
     environment:
+      NOMAD_SKIP_DOCKER_IMAGE_WARN: "1"
       HTTP_PROXY: ""
       HTTPS_PROXY: ""
       http_proxy: ""
@@ -100,7 +102,7 @@ services:
       no_proxy: "*"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./nomad/nomad.hcl:/etc/nomad.d/nomad.hcl:ro
+      - /tmp/play-duckdb-nomad:/nomad/data
       - ./nomad/jobs:/opt/nomad/jobs:ro
     ports:
       - "4646:4646"
