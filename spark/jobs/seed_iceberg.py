@@ -10,9 +10,10 @@ LOAN = "demo.demo.securities_loan"
 
 def main() -> None:
     spark = SparkSession.builder.appName("play-duckdb-seed-iceberg").getOrCreate()
-    print("[spark] executor_count=%s" % len(spark.sparkContext.getExecutorMemoryStatus()))
+    executors = spark.sparkContext.statusTracker().getExecutorInfos()
+    print("[spark] executor_count=%s" % len(executors))
     if observe_enabled():
-        print("[spark] executors=%s" % spark.sparkContext.getExecutorMemoryStatus())
+        print("[spark] executors=%s" % [(info.host(), info.executorId()) for info in executors])
 
     spark.sql("CREATE NAMESPACE IF NOT EXISTS demo.demo")
     spark.sql("DROP TABLE IF EXISTS demo.collateral_position")

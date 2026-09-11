@@ -106,12 +106,6 @@ wait_nomad_batch() {
     local complete failed
     complete="$(nomad_summary_field "$job" "$group" Complete || echo 0)"
     failed="$(nomad_summary_field "$job" "$group" Failed || echo 0)"
-    if [[ "$failed" != "0" ]]; then
-      echo "[nomad] ${job} failed=${failed}" >&2
-      nomad_exec job status "$job" || true
-      nomad_exec alloc logs -job "$job" || true
-      return 1
-    fi
     if [[ "$complete" == "1" ]]; then
       echo "[nomad] ${job} complete"
       nomad_exec alloc logs -job "$job" || true

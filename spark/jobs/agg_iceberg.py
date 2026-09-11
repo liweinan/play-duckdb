@@ -12,9 +12,10 @@ OPEN_LOANS = "demo.demo.open_loans_daily"
 
 def main() -> None:
     spark = SparkSession.builder.appName("play-duckdb-agg-iceberg").getOrCreate()
-    print("[spark] executor_count=%s" % len(spark.sparkContext.getExecutorMemoryStatus()))
+    executors = spark.sparkContext.statusTracker().getExecutorInfos()
+    print("[spark] executor_count=%s" % len(executors))
     if observe_enabled():
-        print("[spark] executors=%s" % spark.sparkContext.getExecutorMemoryStatus())
+        print("[spark] executors=%s" % [(info.host(), info.executorId()) for info in executors])
 
     spark.sql("DROP TABLE IF EXISTS demo.inventory_by_asset")
     spark.sql("DROP TABLE IF EXISTS demo.open_loans_daily")
