@@ -44,11 +44,13 @@ RUN set -eux; \
 
 COPY conf/spark-defaults.conf /opt/spark/conf/spark-defaults.conf
 COPY jobs/seed_iceberg.py /opt/jobs/seed_iceberg.py
+COPY jobs/agg_iceberg.py /opt/jobs/agg_iceberg.py
+COPY jobs/run_etl.sh /opt/jobs/run_etl.sh
 
-RUN chown -R spark:spark /opt/spark/conf /opt/jobs
+RUN chmod +x /opt/jobs/run_etl.sh \
+    && chown -R spark:spark /opt/spark/conf /opt/jobs
 
 USER spark
 WORKDIR /opt/jobs
 
-ENTRYPOINT ["/opt/spark/bin/spark-submit"]
-CMD ["/opt/jobs/seed_iceberg.py"]
+ENTRYPOINT ["/opt/jobs/run_etl.sh"]

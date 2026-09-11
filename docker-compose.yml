@@ -1,4 +1,5 @@
 # Spark writes Iceberg (JdbcCatalog in Postgres, files in MinIO).
+# Nomad schedules Spark Standalone (master + workers) and the ETL batch.
 # DuckDB reads the catalog pointer from Postgres, then iceberg_scan on MinIO.
 #
 # Proxy tip (macOS Docker Desktop → host Clash/V2Ray on 7890):
@@ -80,6 +81,37 @@ services:
         mc anonymous set public minio/warehouse || mc policy set public minio/warehouse
         echo 'warehouse bucket ready'
 
+  nomad:
+    image: hashicorp/nomad:1.9.7
+    user: root
+    privileged: true
+    command: ["agent", "-dev", "-bind=0.0.0.0", "-network-interface=eth0", "-config=/etc/nomad.d/nomad.hcl"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      http_proxy: ""
+      https_proxy: ""
+      NO_PROXY: "*"
+      no_proxy: "*"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./nomad/nomad.hcl:/etc/nomad.d/nomad.hcl:ro
+      - ./nomad/jobs:/opt/nomad/jobs:ro
+    ports:
+      - "4646:4646"
+    healthcheck:
+      test: ["CMD", "nomad", "node", "status"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
   spark:
     build:
       context: ./spark
@@ -95,6 +127,7 @@ services:
       create-bucket:
         condition: service_completed_successfully
     environment:
+      SPARK_MASTER: local[2]
       OBSERVE: ${OBSERVE:-}
       AWS_REGION: us-east-1
       AWS_ACCESS_KEY_ID: admin
@@ -145,3 +178,7 @@ services:
       no_proxy: minio,postgres,spark,localhost,127.0.0.1
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+networks:
+  default:
+    name: play-duckdb_default

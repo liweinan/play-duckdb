@@ -3,8 +3,9 @@
 -- =============================================================================
 -- Mental model:
 --
---   Spark (JdbcCatalog)
---     CREATE / INSERT Iceberg tables
+--   Nomad (docker driver) schedules Spark Standalone:
+--     spark-master x1 + spark-worker xN + batch spark-etl
+--     Spark (JdbcCatalog) writes facts then marts
 --           |
 --           +-- pointer (table → metadata.json) -->  PostgreSQL iceberg_tables
 --           +-- metadata + Parquet files --------->  MinIO s3://warehouse/
@@ -27,4 +28,8 @@
 --
 -- Observe (OBSERVE=1 or --observe): dump Iceberg snapshots / manifests / files
 -- and SELECT * from named layers. Demo tables only.
+--
+-- Nomad schedules processes; Spark owns the DAG. DuckDB is the report runtime
+-- and reads Spark marts (inventory_by_asset / open_loans_daily). No Vagrant:
+-- Nomad is a single binary + Docker socket (CI and Docker Desktop).
 -- =============================================================================

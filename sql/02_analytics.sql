@@ -2,6 +2,7 @@
 -- 02_analytics.sql — Executed by QueryParquetJob after Iceberg views exist.
 -- Views v_collateral_position / v_securities_loan are created in Java from
 -- iceberg_scan(<postgres metadata_location>).
+-- v_inventory_by_asset / v_open_loans_daily are Spark marts (same grain as ReportJob).
 -- =============================================================================
 
 -- Demo 1: inventory by asset type per day
@@ -50,4 +51,13 @@ SELECT as_of_date,
        ROUND(mv, 2) AS mv,
        ROUND(mv - LAG(mv) OVER (ORDER BY as_of_date), 2) AS dod_change
 FROM bond_a
+ORDER BY as_of_date;
+
+-- Demo 5: Spark marts (pre-aggregated by the Nomad Spark ETL)
+SELECT as_of_date, asset_type, position_count, total_market_value, currency
+FROM v_inventory_by_asset
+ORDER BY asset_type, currency;
+
+SELECT as_of_date, open_loan_count, total_qty, avg_fee_bps
+FROM v_open_loans_daily
 ORDER BY as_of_date;

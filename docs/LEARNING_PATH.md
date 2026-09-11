@@ -6,7 +6,8 @@
 
 | 岗位描述（抽象） | 本项目练习点 |
 |------------------|--------------|
-| Spark 写湖仓表 | `spark/jobs/seed_iceberg.py`：JdbcCatalog + MinIO |
+| Spark 写湖仓表 | `seed_iceberg.py` + `agg_iceberg.py`：JdbcCatalog + MinIO |
+| Nomad 调度批任务 | `nomad/jobs/*.nomad`：master + worker×2 + ETL batch |
 | Catalog 指针 | Postgres `iceberg_tables.metadata_location` |
 | DuckDB runtime 查询 | `QueryParquetJob` + `sql/02_analytics.sql` |
 | 分层 SQL | `LayeredAnalyticsJob` + `sql/03_layered.sql` |
@@ -29,9 +30,9 @@
 
 ### 2. 读懂三阶段（1 小时）
 
-1. `seed_iceberg.py` — Spark 建表、分区、INSERT  
+1. Nomad 拉起 Spark Standalone，`run_etl.sh` 跑 seed + agg  
 2. `IcebergTables` — 读 Postgres 指针，再 `iceberg_scan`  
-3. `ReportJob` — 聚合报表  
+3. `ReportJob` — 薄 `COPY` Spark mart（不再在 DuckDB 里聚合事实表）  
 
 对照 `sql/02_analytics.sql` 里的窗口函数与 JOIN。
 
@@ -73,7 +74,13 @@ Iceberg catalog 只保管「当前 metadata.json 地址」这一枚可变指针�
 ./run.sh layers --observe
 ```
 
-或 `OBSERVE=1 ./run.sh all`。默认关闭；打开后 stdout 会多出 `======== observe: … ========` 段（样例表很小才 `SELECT *`）。
+或 `OBSERVE=1 ./run.sh all`。默认关闭；打开后 stdout 会多出 `======== observe: … ========` 段（样例表很小才 `SELECT *`），以及 Nomad job status。
+
+### 6. Nomad 在哪一层
+
+Nomad **调度** Spark 进程（1 个 master + `NOMAD_SPARK_WORKERS` 个 worker + 一次 ETL batch）。Spark **自己**管 DAG / shuffle。DuckDB 是报表 runtime，读 `inventory_by_asset` / `open_loans_daily`。
+
+本机 Docker Desktop 和 GitHub Actions 都走 `./run.sh`，**不需要 Vagrant**。macos-k8s-box 那种 VM 是 kubeadm 的需求，不是 Nomad 的。水平扩展看的是 worker allocation 数，不是这 12 行样例的 CPU。
 
 ## 常用 DuckDB SQL 片段
 

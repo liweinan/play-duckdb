@@ -20,6 +20,8 @@ public final class IcebergTables {
     static final String NAMESPACE = "demo";
     static final String COLLATERAL_POSITION = "collateral_position";
     static final String SECURITIES_LOAN = "securities_loan";
+    static final String INVENTORY_BY_ASSET = "inventory_by_asset";
+    static final String OPEN_LOANS_DAILY = "open_loans_daily";
 
     private static boolean icebergObserved;
 
@@ -76,7 +78,7 @@ public final class IcebergTables {
                 SELECT table_name, metadata_location
                 FROM iceberg_tables
                 WHERE table_namespace = ?
-                  AND table_name IN (?, ?)
+                  AND table_name IN (?, ?, ?, ?)
                 """;
 
         try (Connection postgres = DriverManager.getConnection(url, user, password);
@@ -84,6 +86,8 @@ public final class IcebergTables {
             statement.setString(1, NAMESPACE);
             statement.setString(2, COLLATERAL_POSITION);
             statement.setString(3, SECURITIES_LOAN);
+            statement.setString(4, INVENTORY_BY_ASSET);
+            statement.setString(5, OPEN_LOANS_DAILY);
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
                     locations.put(resultSet.getString("table_name"), resultSet.getString("metadata_location"));
@@ -93,6 +97,8 @@ public final class IcebergTables {
 
         requireLocation(locations, COLLATERAL_POSITION);
         requireLocation(locations, SECURITIES_LOAN);
+        requireLocation(locations, INVENTORY_BY_ASSET);
+        requireLocation(locations, OPEN_LOANS_DAILY);
         return locations;
     }
 
@@ -102,6 +108,8 @@ public final class IcebergTables {
         Map<String, String> locations = metadataLocations();
         createScanView(duckDb, "v_collateral_position", locations.get(COLLATERAL_POSITION));
         createScanView(duckDb, "v_securities_loan", locations.get(SECURITIES_LOAN));
+        createScanView(duckDb, "v_inventory_by_asset", locations.get(INVENTORY_BY_ASSET));
+        createScanView(duckDb, "v_open_loans_daily", locations.get(OPEN_LOANS_DAILY));
         if (Observe.enabled()) {
             observeIceberg(duckDb, locations);
         }
@@ -127,6 +135,8 @@ public final class IcebergTables {
 
         observeIcebergTable(duckDb, COLLATERAL_POSITION, locations.get(COLLATERAL_POSITION), "v_collateral_position");
         observeIcebergTable(duckDb, SECURITIES_LOAN, locations.get(SECURITIES_LOAN), "v_securities_loan");
+        observeIcebergTable(duckDb, INVENTORY_BY_ASSET, locations.get(INVENTORY_BY_ASSET), "v_inventory_by_asset");
+        observeIcebergTable(duckDb, OPEN_LOANS_DAILY, locations.get(OPEN_LOANS_DAILY), "v_open_loans_daily");
     }
 
     private static void observeIcebergTable(
