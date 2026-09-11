@@ -12,8 +12,8 @@ if [[ -n "${DRIVER_HOST}" ]]; then
     --conf "spark.driver.host=${DRIVER_HOST}"
     --conf "spark.driver.bindAddress=0.0.0.0"
     --conf "spark.driver.memory=512m"
-    --conf "spark.executor.memory=256m"
-    --conf "spark.executor.memoryOverhead=64m"
+    --conf "spark.executor.memory=512m"
+    --conf "spark.executor.memoryOverhead=128m"
     --conf "spark.executor.cores=1"
     --conf "spark.cores.max=2"
   )

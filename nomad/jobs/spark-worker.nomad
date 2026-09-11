@@ -20,7 +20,7 @@ job "spark-worker" {
         args = [
           "org.apache.spark.deploy.worker.Worker",
           "--cores", "1",
-          "--memory", "512m",
+          "--memory", "1g",
           "spark://spark-master:7077",
         ]
       }
@@ -32,13 +32,13 @@ job "spark-worker" {
         https_proxy          = ""
         NO_PROXY             = "minio,postgres,spark-master,spark-etl,localhost,127.0.0.1"
         no_proxy             = "minio,postgres,spark-master,spark-etl,localhost,127.0.0.1"
-        SPARK_WORKER_MEMORY  = "512m"
+        SPARK_WORKER_MEMORY  = "1g"
         SPARK_WORKER_CORES   = "1"
       }
 
       resources {
         cpu    = 400
-        memory = 768
+        memory = 1280
       }
     }
   }
