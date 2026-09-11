@@ -15,10 +15,12 @@ if [[ -n "${DRIVER_HOST}" ]]; then
   )
 fi
 
-echo "[etl] spark-submit --master ${MASTER} seed_iceberg.py"
+echo "[etl $(date -u +%H:%M:%S)] SPARK_MASTER=${MASTER} SPARK_DRIVER_HOST=${DRIVER_HOST:-} OBSERVE=${OBSERVE:-off}"
+echo "[etl $(date -u +%H:%M:%S)] spark-submit seed_iceberg.py"
 "${SUBMIT[@]}" /opt/jobs/seed_iceberg.py
+echo "[etl $(date -u +%H:%M:%S)] seed_iceberg.py exit=0"
 
-echo "[etl] spark-submit --master ${MASTER} agg_iceberg.py"
+echo "[etl $(date -u +%H:%M:%S)] spark-submit agg_iceberg.py"
 "${SUBMIT[@]}" /opt/jobs/agg_iceberg.py
-
-echo "[etl] facts + marts written"
+echo "[etl $(date -u +%H:%M:%S)] agg_iceberg.py exit=0"
+echo "[etl $(date -u +%H:%M:%S)] facts + marts written"

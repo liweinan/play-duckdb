@@ -65,17 +65,39 @@ use_host_nomad() {
   }
 }
 
-nomad_summary_field() {
+nomad_log() {
+  echo "[nomad $(date -u +%H:%M:%S)] $*"
+}
+
+nomad_summary() {
   local job="$1"
   local group="$2"
-  local field="$3"
-  python3 - "$NOMAD_HTTP" "$job" "$group" "$field" <<'PY'
+  python3 - "$NOMAD_HTTP" "$job" "$group" <<'PY'
 import json, sys, urllib.request
-base, job, group, field = sys.argv[1:5]
-with urllib.request.urlopen(base + "/v1/job/" + job + "/summary") as response:
-    payload = json.load(response)
-print(payload["Summary"][group][field])
+base, job, group = sys.argv[1:4]
+try:
+    with urllib.request.urlopen(base + "/v1/job/" + job + "/summary", timeout=5) as response:
+        payload = json.load(response)
+    row = payload["Summary"][group]
+except Exception as exc:
+    print("error=1 queued=0 starting=0 running=0 failed=0 complete=0 lost=0 msg=%s" % exc)
+    raise SystemExit(0)
+print(
+    "error=0 queued=%(Queued)s starting=%(Starting)s running=%(Running)s "
+    "failed=%(Failed)s complete=%(Complete)s lost=%(Lost)s" % row
+)
 PY
+}
+
+nomad_dump_job() {
+  local job="$1"
+  nomad_log "---- job status ${job} ----"
+  nomad_exec job status "$job" || true
+  nomad_log "---- alloc status ${job} ----"
+  nomad_exec alloc status -job "$job" || true
+  nomad_log "---- alloc logs ${job} ----"
+  nomad_exec alloc logs -job "$job" || true
+  nomad_exec alloc logs -stderr -job "$job" || true
 }
 
 wait_nomad_running() {
@@ -83,18 +105,25 @@ wait_nomad_running() {
   local group="$2"
   local want="$3"
   local i=0
+  nomad_log "waiting for ${job}/${group} running=${want}"
   while (( i < 90 )); do
-    local running
-    running="$(nomad_summary_field "$job" "$group" Running || echo 0)"
+    local summary running
+    summary="$(nomad_summary "$job" "$group")"
+    running="$(echo "$summary" | sed -n 's/.*running=\([0-9]*\).*/\1/p')"
+    running="${running:-0}"
+    nomad_log "${job} ${summary}"
     if [[ "$running" == "$want" ]]; then
-      echo "[nomad] ${job} ${group} running=${running}"
+      nomad_log "${job}/${group} running=${running} (ready)"
       return 0
+    fi
+    if (( i > 0 && i % 8 == 0 )); then
+      nomad_dump_job "$job"
     fi
     sleep 2
     i=$((i + 1))
   done
-  echo "[nomad] timed out waiting for ${job} ${group} running=${want}" >&2
-  nomad_exec job status "$job" || true
+  nomad_log "timed out waiting for ${job}/${group} running=${want}" >&2
+  nomad_dump_job "$job"
   return 1
 }
 
@@ -102,21 +131,44 @@ wait_nomad_batch() {
   local job="$1"
   local group="$2"
   local i=0
+  local idle_failed=0
+  nomad_log "waiting for batch ${job}/${group} complete"
   while (( i < 180 )); do
-    local complete failed
-    complete="$(nomad_summary_field "$job" "$group" Complete || echo 0)"
-    failed="$(nomad_summary_field "$job" "$group" Failed || echo 0)"
+    local summary running starting failed complete
+    summary="$(nomad_summary "$job" "$group")"
+    running="$(echo "$summary" | sed -n 's/.*running=\([0-9]*\).*/\1/p')"
+    starting="$(echo "$summary" | sed -n 's/.*starting=\([0-9]*\).*/\1/p')"
+    failed="$(echo "$summary" | sed -n 's/.*failed=\([0-9]*\).*/\1/p')"
+    complete="$(echo "$summary" | sed -n 's/.*complete=\([0-9]*\).*/\1/p')"
+    running="${running:-0}"
+    starting="${starting:-0}"
+    failed="${failed:-0}"
+    complete="${complete:-0}"
+    nomad_log "${job} ${summary}"
     if [[ "$complete" == "1" ]]; then
-      echo "[nomad] ${job} complete"
-      nomad_exec alloc logs -job "$job" || true
+      nomad_log "${job} complete"
+      nomad_dump_job "$job"
       return 0
+    fi
+    if (( i > 0 && i % 5 == 0 )); then
+      nomad_log "---- live alloc logs ${job} ----"
+      nomad_exec alloc logs -job "$job" || true
+    fi
+    if [[ "$failed" != "0" && "$running" == "0" && "$starting" == "0" && "$complete" == "0" ]]; then
+      idle_failed=$((idle_failed + 1))
+      if (( idle_failed >= 4 )); then
+        nomad_log "${job} failed and is idle (no reschedule)" >&2
+        nomad_dump_job "$job"
+        return 1
+      fi
+    else
+      idle_failed=0
     fi
     sleep 2
     i=$((i + 1))
   done
-  echo "[nomad] timed out waiting for ${job} complete" >&2
-  nomad_exec job status "$job" || true
-  nomad_exec alloc logs -job "$job" || true
+  nomad_log "timed out waiting for ${job} complete" >&2
+  nomad_dump_job "$job"
   return 1
 }
 
@@ -125,23 +177,26 @@ start_nomad_host() {
   export NOMAD_ADDR="${NOMAD_HTTP}"
   mkdir -p /tmp/play-duckdb-nomad
   if curl -sf "${NOMAD_HTTP}/v1/status/leader" >/dev/null; then
-    echo "[nomad] host agent already up"
+    nomad_log "host agent already up"
     return 0
   fi
-  echo "[nomad] starting host agent -dev"
+  nomad_log "starting host agent -dev"
   nomad agent -dev -bind=0.0.0.0 -data-dir=/tmp/play-duckdb-nomad \
     > /tmp/play-duckdb-nomad-agent.log 2>&1 &
   echo $! > /tmp/play-duckdb-nomad-agent.pid
   local i=0
   while (( i < 60 )); do
     if curl -sf "${NOMAD_HTTP}/v1/status/leader" >/dev/null; then
-      echo "[nomad] host agent ready"
+      nomad_log "host agent ready"
       return 0
+    fi
+    if (( i % 5 == 0 )); then
+      nomad_log "host agent still starting (${i}s)"
     fi
     sleep 1
     i=$((i + 1))
   done
-  echo "[nomad] host agent failed to become ready" >&2
+  nomad_log "host agent failed to become ready" >&2
   cat /tmp/play-duckdb-nomad-agent.log >&2 || true
   return 1
 }
@@ -157,25 +212,33 @@ start_nomad_compose() {
 }
 
 run_seed() {
+  nomad_log "up postgres + minio"
   docker compose up -d --wait postgres minio
+  nomad_log "create-bucket"
   docker compose run --rm create-bucket
 
   if [[ "${CI:-}" == "true" ]] && command -v nomad >/dev/null 2>&1; then
+    nomad_log "mode=host-agent"
     start_nomad_host
   else
+    nomad_log "mode=compose-agent"
     start_nomad_compose
   fi
 
+  nomad_log "submit spark-master from ${JOB_DIR}"
   nomad_exec job run "${JOB_DIR}/spark-master.nomad"
   wait_nomad_running spark-master master 1
 
+  nomad_log "submit spark-worker count=${WORKERS}"
   nomad_exec job run -var="workers=${WORKERS}" "${JOB_DIR}/spark-worker.nomad"
   wait_nomad_running spark-worker worker "$WORKERS"
-  echo "[nomad] spark-worker running=${WORKERS}"
+  nomad_log "spark-worker running=${WORKERS}"
 
+  nomad_log "submit spark-etl"
   nomad_exec job stop -purge spark-etl >/dev/null 2>&1 || true
   nomad_exec job run -var="observe=${OBSERVE:-}" "${JOB_DIR}/spark-etl.nomad"
   wait_nomad_batch spark-etl etl
+  nomad_log "seed finished"
 
   if [[ "${OBSERVE:-}" == "1" ]]; then
     echo "======== observe: nomad job status ========"
